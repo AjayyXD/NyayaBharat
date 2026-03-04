@@ -4,12 +4,17 @@ from pydantic import BaseModel
 import uvicorn
 import boto3
 import os
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
 # Import completed services
 from services.rights_chatbot import RightsChatbotService
 from services.voice_complaint import VoiceComplaintService  # Done by colleague
+from services.legal_lens import legal_lens_with_nova, INDIAN_LANGUAGES
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -74,7 +79,7 @@ async def root():
         "services": {
             "rights_chatbot":  "✅ Live",
             "voice_complaint": "✅ Live",
-            "legal_lens":      "🚧 Coming Soon",
+            "legal_lens":      "✅ Live",
             "officer_mode":    "🚧 Coming Soon",
             "whatsapp":        "🚧 Coming Soon",
         }
@@ -172,7 +177,7 @@ async def file_voice_complaint(
         raise HTTPException(status_code=500, detail=f"Voice Complaint Error: {str(e)}")
 
 # ===========================================================
-# 3. LEGAL LENS  🚧 (placeholder — ready for implementation)
+# 3. LEGAL LENS  ✅
 # ===========================================================
 
 @app.post("/api/legal-lens/analyze", tags=["Legal Lens"])
@@ -182,15 +187,51 @@ async def analyze_legal_document(
 ):
     """
     Upload a photo of a legal notice to get a simplified explanation
-    and action items in your native language.
+    and action items in your native Indian language.
+
+    Supported language codes:
+    hi: Hindi | bn: Bengali | te: Telugu | mr: Marathi | ta: Tamil
+    gu: Gujarati | kn: Kannada | ml: Malayalam | pa: Punjabi
+    or: Odia | as: Assamese | ur: Urdu | en: English
     """
-    # TODO: Implement using Amazon Textract (OCR) + Nova (simplification)
-    # Step 1: Textract -> extract text from image
-    # Step 2: Nova -> simplify + generate action items in requested language
-    raise HTTPException(
-        status_code=501,
-        detail="Legal Lens is under development. Coming soon!"
-    )
+    # Validate language code
+    if language not in INDIAN_LANGUAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language code '{language}'. Supported: {list(INDIAN_LANGUAGES.keys())}"
+        )
+
+    # Validate file type
+    if image.content_type not in ("image/jpeg", "image/jpg", "image/png", "image/webp"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, or WebP images are supported."
+        )
+
+    # Read and size-check image
+    image_bytes = await image.read()
+    if len(image_bytes) > 5 * 1024 * 1024:  # 5 MB limit
+        raise HTTPException(status_code=400, detail="Image size must be under 5MB.")
+
+    try:
+        result = legal_lens_with_nova(
+            image_bytes=image_bytes,
+            language_code=language,
+            content_type=image.content_type
+        )
+        return {
+            "status": "success",
+            "filename": image.filename,
+            "language": result["language"],
+            "language_code": result["language_code"],
+            "analysis": result["analysis"],
+            "model": result["model"],
+            "response_time": datetime.now().isoformat()
+        }
+    except Exception as e:
+        import traceback
+        logger.error("Legal Lens failed: %s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Legal Lens Error: {type(e).__name__}: {str(e)}")
 
 # ===========================================================
 # 4. OFFICER MODE  🚧 (placeholder — ready for implementation)
@@ -205,9 +246,6 @@ async def scan_petition(
     """
     Scan a handwritten petition and convert it into a formal government document.
     """
-    # TODO: Implement using Amazon Textract (handwriting OCR) + Nova (formalization)
-    # Step 1: Textract -> extract handwritten text
-    # Step 2: Nova -> convert to formal government document format
     raise HTTPException(
         status_code=501,
         detail="Officer Mode is under development. Coming soon!"
@@ -223,10 +261,6 @@ async def whatsapp_webhook(message: WhatsAppMessage):
     Handle incoming WhatsApp messages (text, image, voice).
     Routes to the appropriate service based on message type.
     """
-    # TODO: Route based on message_type:
-    # - "text"  -> rights_chatbot.answer_legal_query()
-    # - "image" -> legal_lens (when ready)
-    # - "voice" -> voice_complaint (when ready)
     raise HTTPException(
         status_code=501,
         detail="WhatsApp integration is under development. Coming soon!"
