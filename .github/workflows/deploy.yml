@@ -3,7 +3,7 @@ name: Deploy NyayaBharat
 on:
   push:
     branches:
-      - main          # runs every time you push to main
+      - main
 
 jobs:
   deploy:
@@ -20,17 +20,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/NyayaBharat
-
-            # Pull latest code
+            cd /home/admin/NyayaBharat
             git pull origin main
-
-            # Activate venv and install any new dependencies
             source venv/bin/activate
             pip install -r requirements.txt --quiet
-
-            # Restart the backend service
             sudo systemctl restart nyayabharat
-
-            # Confirm it's running
             sudo systemctl is-active nyayabharat
