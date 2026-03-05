@@ -4,7 +4,6 @@ from pydantic import BaseModel
 import uvicorn
 import boto3
 import os
-import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -12,9 +11,7 @@ from dotenv import load_dotenv
 from services.rights_chatbot import RightsChatbotService
 from services.voice_complaint import VoiceComplaintService  # Done by colleague
 from services.legal_lens import legal_lens_with_nova, INDIAN_LANGUAGES
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+from services.officer_mode import scan_petition_with_nova, DEPARTMENTS, INDIAN_LANGUAGES as OFFICER_LANGUAGES
 
 load_dotenv()
 
@@ -80,7 +77,7 @@ async def root():
             "rights_chatbot":  "✅ Live",
             "voice_complaint": "✅ Live",
             "legal_lens":      "✅ Live",
-            "officer_mode":    "🚧 Coming Soon",
+            "officer_mode":    "✅ Live",
             "whatsapp":        "🚧 Coming Soon",
         }
     }
@@ -229,27 +226,77 @@ async def analyze_legal_document(
             "response_time": datetime.now().isoformat()
         }
     except Exception as e:
-        import traceback
-        logger.error("Legal Lens failed: %s", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Legal Lens Error: {type(e).__name__}: {str(e)}")
 
 # ===========================================================
-# 4. OFFICER MODE  🚧 (placeholder — ready for implementation)
+# 4. OFFICER MODE  ✅
 # ===========================================================
+
+@app.get("/api/officer/departments", tags=["Officer Mode"])
+async def list_departments():
+    """List all supported government departments."""
+    return {"departments": DEPARTMENTS}
+
 
 @app.post("/api/officer/scan-petition", tags=["Officer Mode"])
 async def scan_petition(
-    image: UploadFile = File(..., description="Photo of a handwritten petition"),
-    department: str = Form(default="General", description="Government department"),
-    language: str = Form(default="hi")
+    image: UploadFile = File(..., description="Photo of a handwritten petition (English)"),
+    department: str = Form(default="general", description=f"Department key. Use /api/officer/departments to list all."),
+    language: str = Form(default="en")
 ):
     """
-    Scan a handwritten petition and convert it into a formal government document.
+    Scan a handwritten English petition and convert it into a
+    formal government document for the specified department.
+
+    Returns both the raw transcription and the formatted formal document.
+    Native language support coming soon.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="Officer Mode is under development. Coming soon!"
-    )
+    # Validate department
+    if department.lower() not in DEPARTMENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown department '{department}'. Call /api/officer/departments for valid keys."
+        )
+
+    # Validate file type
+    if image.content_type not in ("image/jpeg", "image/jpg", "image/png", "image/webp"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, or WebP images are supported."
+        )
+
+    # Validate language
+    if language not in OFFICER_LANGUAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language code '{language}'. Supported: {list(OFFICER_LANGUAGES.keys())}"
+        )
+
+    # Read and size-check
+    image_bytes = await image.read()
+    if len(image_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image size must be under 5MB.")
+
+    try:
+        result = scan_petition_with_nova(
+            image_bytes=image_bytes,
+            department=department,
+            content_type=image.content_type,
+            language_code=language
+        )
+        return {
+            "status": "success",
+            "filename": image.filename,
+            "department": result["department"],
+            "language": result["language"],
+            "language_code": result["language_code"],
+            "transcription": result["transcription"],
+            "formal_document": result["formal_document"],
+            "model": result["model"],
+            "response_time": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Officer Mode Error: {type(e).__name__}: {str(e)}")
 
 # ===========================================================
 # 5. WHATSAPP INTEGRATION  🚧 (placeholder — ready for implementation)
