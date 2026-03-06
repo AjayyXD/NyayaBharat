@@ -50,4 +50,5 @@ tmp/
 # Pytest
 .pytest_cache/
 htmlcov/
-.coverage
+.coverage__pycache__/
+*.pyc
