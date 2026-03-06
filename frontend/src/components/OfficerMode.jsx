@@ -33,9 +33,9 @@ const styles = `
     display: flex;
     flex-direction: column;
     height: 100%;
+    overflow: hidden;
   }
 
-  /* Header */
   .om-header {
     display: flex;
     align-items: center;
@@ -86,21 +86,22 @@ const styles = `
   }
   .om-close:hover { color: #fff; }
 
-  /* Scrollable body */
+  /* KEY FIX: body must scroll, not the panel */
   .om-body {
     flex: 1;
     overflow-y: auto;
-    padding: 28px 32px;
+    overflow-x: hidden;
+    padding: 28px 32px 60px;
     display: flex;
     flex-direction: column;
     gap: 20px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.1) transparent;
+    -webkit-overflow-scrolling: touch;
   }
   .om-body::-webkit-scrollbar { width: 4px; }
   .om-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
-  /* Section label */
   .om-label {
     font-size: 11px;
     font-weight: 700;
@@ -110,7 +111,6 @@ const styles = `
     margin-bottom: 8px;
   }
 
-  /* Upload zone */
   .om-upload-zone {
     background: rgba(255,255,255,0.04);
     border: 2px dashed rgba(255,255,255,0.1);
@@ -164,7 +164,6 @@ const styles = `
     margin-top: 4px;
   }
 
-  /* Selects row */
   .om-selects-row {
     display: flex;
     gap: 12px;
@@ -197,7 +196,6 @@ const styles = `
   .om-select:focus { border-color: rgba(139,92,246,0.5); }
   .om-select option { background: #1e1030; }
 
-  /* Submit button */
   .om-submit-btn {
     width: 100%;
     padding: 13px;
@@ -219,7 +217,6 @@ const styles = `
   .om-submit-btn:active { transform: scale(0.99); }
   .om-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-  /* Spinner */
   .om-spinner {
     width: 16px;
     height: 16px;
@@ -231,11 +228,11 @@ const styles = `
   }
   @keyframes om-spin { to { transform: rotate(360deg); } }
 
-  /* Results */
   .om-result-card {
     background: rgba(255,255,255,0.05);
     border-radius: 12px;
     overflow: hidden;
+    /* KEY FIX: don't constrain height here */
   }
 
   .om-result-header {
@@ -244,6 +241,8 @@ const styles = `
     justify-content: space-between;
     padding: 14px 18px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .om-result-title {
@@ -260,14 +259,17 @@ const styles = `
     color: #4b5563;
   }
 
+  /* KEY FIX: result body shows full content, no max-height clipping */
   .om-result-body {
     padding: 16px 18px;
     font-size: 13px;
     color: #d1d5db;
     white-space: pre-wrap;
     line-height: 1.7;
+    word-break: break-word;
   }
 
+  /* KEY FIX: textarea expands to show all content */
   .om-formal-textarea {
     width: 100%;
     background: transparent;
@@ -278,7 +280,14 @@ const styles = `
     font-family: 'DM Sans', sans-serif;
     line-height: 1.7;
     resize: vertical;
-    min-height: 160px;
+    min-height: 300px;
+    box-sizing: border-box;
+  }
+
+  .om-action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
   .om-copy-btn {
@@ -294,6 +303,20 @@ const styles = `
   }
   .om-copy-btn:hover { background: rgba(91,33,182,0.2); }
 
+  .om-pdf-btn {
+    background: #5b21b6;
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  .om-pdf-btn:hover { background: #6d28d9; }
+
   .om-success-tag {
     display: inline-flex;
     align-items: center;
@@ -304,7 +327,6 @@ const styles = `
     padding: 4px 10px;
     font-size: 12px;
     font-weight: 600;
-    margin-bottom: 16px;
   }
 
   .om-error {
@@ -322,17 +344,20 @@ const styles = `
   }
 `
 
-export default function OfficerMode({ apiBase = '', onClose }) {
+export default function OfficerMode({ apiBase = '', onClose, result, setResult }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [department, setDepartment] = useState('general')
-  const [lang, setLang] = useState('en')
   const [departments, setDepartments] = useState({ general: 'General' })
-  const [res, setRes] = useState(null)
   const [loading, setLoading] = useState(false)
   const [drag, setDrag] = useState(false)
   const [copied, setCopied] = useState(false)
   const fileRef = useRef()
+  const resultRef = useRef()
+
+  // Use lifted state: res = result prop, setRes = setResult prop
+  const res = result
+  const setRes = setResult
 
   useEffect(() => {
     fetch(`${apiBase}/api/officer/departments`)
@@ -341,21 +366,29 @@ export default function OfficerMode({ apiBase = '', onClose }) {
       .catch(() => {})
   }, [apiBase])
 
+  useEffect(() => {
+    if (res && resultRef.current) {
+      setTimeout(() => {
+        resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [res])
+
   function pickFile(f) {
     if (!f) return
     setFile(f)
     setRes(null)
-    const url = URL.createObjectURL(f)
-    setPreview(url)
+    setPreview(URL.createObjectURL(f))
   }
 
   async function scan() {
     if (!file) return
     setLoading(true)
+    setRes(null)
     const fd = new FormData()
     fd.append('image', file)
     fd.append('department', department)
-    fd.append('language', lang)
+    fd.append('language', 'en')
     try {
       const r = await fetch(`${apiBase}/api/officer/scan-petition`, { method: 'POST', body: fd })
       setRes(await r.json())
@@ -371,6 +404,65 @@ export default function OfficerMode({ apiBase = '', onClose }) {
     navigator.clipboard.writeText(res.formal_document)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function downloadPDF() {
+    // Load jsPDF dynamically
+    if (window.jspdf) { generatePDF(); return; }
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+    script.onload = generatePDF
+    document.head.appendChild(script)
+  }
+
+  function generatePDF() {
+    const { jsPDF } = window.jspdf
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const margin = 20
+    const maxWidth = pageWidth - margin * 2
+    let y = 20
+
+    // Header
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('FORMAL COMPLAINT / PETITION', pageWidth / 2, y, { align: 'center' })
+    y += 8
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100)
+    doc.text(`Department: ${res.department}`, pageWidth / 2, y, { align: 'center' })
+    y += 6
+    doc.text(`Generated by NyayaBharat on ${new Date().toLocaleDateString('en-IN')}`, pageWidth / 2, y, { align: 'center' })
+    y += 10
+
+    // Divider
+    doc.setDrawColor(200)
+    doc.setLineWidth(0.4)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 10
+
+    // Body
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(30)
+
+    const lines = doc.splitTextToSize(res.formal_document, maxWidth)
+    lines.forEach(line => {
+      if (y > 272) { doc.addPage(); y = 20 }
+      doc.text(line, margin, y)
+      y += 6
+    })
+
+    // Footer
+    if (y > 265) { doc.addPage(); y = 20 }
+    y += 8
+    doc.setFontSize(9)
+    doc.setTextColor(160)
+    doc.text('Generated by NyayaBharat AI — AI-assisted legal platform for Indian citizens.', margin, y, { maxWidth })
+
+    doc.save(`NyayaBharat_${res.department?.replace(/\s+/g, '_') || 'Complaint'}.pdf`)
   }
 
   return (
@@ -394,12 +486,12 @@ export default function OfficerMode({ apiBase = '', onClose }) {
                 </div>
                 <div className="om-header-text">
                   <h3>Government Officer Portal</h3>
-                  <span>Scan & formalize petitions</span>
+                  <span>Scan &amp; formalize petitions</span>
                 </div>
               </div>
             </div>
 
-            {/* Body */}
+            {/* Scrollable body */}
             <div className="om-body">
 
               {/* Upload */}
@@ -430,13 +522,7 @@ export default function OfficerMode({ apiBase = '', onClose }) {
                       <p className="om-upload-sub">Supports JPG, PNG, WEBP · Handwritten or printed petitions</p>
                     </>
                   )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={e => pickFile(e.target.files?.[0])}
-                  />
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile(e.target.files?.[0])} />
                 </div>
               </div>
 
@@ -448,24 +534,6 @@ export default function OfficerMode({ apiBase = '', onClose }) {
                     {Object.entries(departments).map(([key, name]) => (
                       <option key={key} value={key}>{name}</option>
                     ))}
-                  </select>
-                </div>
-                <div className="om-select-group">
-                  <div className="om-label">Output Language</div>
-                  <select className="om-select" value={lang} onChange={e => setLang(e.target.value)}>
-                    <option value="en">English</option>
-                    <option value="hi">Hindi</option>
-                    <option value="bn">Bengali</option>
-                    <option value="te">Telugu</option>
-                    <option value="mr">Marathi</option>
-                    <option value="ta">Tamil</option>
-                    <option value="gu">Gujarati</option>
-                    <option value="kn">Kannada</option>
-                    <option value="ml">Malayalam</option>
-                    <option value="pa">Punjabi</option>
-                    <option value="or">Odia</option>
-                    <option value="as">Assamese</option>
-                    <option value="ur">Urdu</option>
                   </select>
                 </div>
               </div>
@@ -486,60 +554,64 @@ export default function OfficerMode({ apiBase = '', onClose }) {
 
               {/* Results */}
               {res && (
-                res.error ? (
-                  <div className="om-error">⚠ {res.error}</div>
-                ) : (
-                  <>
-                    <div className="om-success-tag">✓ Document Generated</div>
+                <div ref={resultRef}>
+                  {res.error ? (
+                    <div className="om-error">⚠ {res.error}</div>
+                  ) : (
+                    <>
+                      <div className="om-success-tag" style={{ marginBottom: 16 }}>✓ Document Generated</div>
 
-                    {/* Transcription */}
-                    <div className="om-result-card">
-                      <div className="om-result-header">
-                        <div className="om-result-title">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
-                          </svg>
-                          Transcription
+                      {/* Transcription */}
+                      <div className="om-result-card" style={{ marginBottom: 12 }}>
+                        <div className="om-result-header">
+                          <div className="om-result-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                              <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            Transcription
+                          </div>
+                          <span className="om-result-meta">Handwritten text detected</span>
                         </div>
-                        <span className="om-result-meta">Handwritten text detected</span>
+                        <div className="om-result-body">{res.transcription}</div>
                       </div>
-                      <div className="om-result-body">{res.transcription}</div>
-                    </div>
 
-                    <div className="om-divider" />
+                      <div className="om-divider" style={{ marginBottom: 12 }} />
 
-                    {/* Formal document */}
-                    <div className="om-result-card">
-                      <div className="om-result-header">
-                        <div className="om-result-title">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                          </svg>
-                          Formal Document · {res.language}
+                      {/* Formal document */}
+                      <div className="om-result-card">
+                        <div className="om-result-header">
+                          <div className="om-result-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                            </svg>
+                            Formal Document · {res.language}
+                          </div>
+                          <div className="om-action-row">
+                            <button className="om-copy-btn" onClick={copyDoc}>
+                              {copied ? '✓ Copied' : 'Copy'}
+                            </button>
+                            <button className="om-pdf-btn" onClick={downloadPDF}>
+                              ⬇ Download PDF
+                            </button>
+                          </div>
                         </div>
-                        <button className="om-copy-btn" onClick={copyDoc}>
-                          {copied ? '✓ Copied' : 'Copy'}
-                        </button>
-                      </div>
-                      <div className="om-result-body">
-                        <textarea
-                          className="om-formal-textarea"
-                          defaultValue={res.formal_document}
-                          rows={10}
-                        />
-                      </div>
-                      {(res.department || res.model) && (
-                        <div style={{ padding: '0 18px 14px', fontSize: 11, color: '#4b5563' }}>
-                          {res.department && `Dept: ${res.department}`}{res.department && res.model && ' · '}{res.model && `Model: ${res.model}`}
+                        <div className="om-result-body">
+                          <textarea
+                            className="om-formal-textarea"
+                            defaultValue={res.formal_document}
+                            rows={Math.max(10, (res.formal_document || '').split('\n').length + 2)}
+                          />
                         </div>
-                      )}
-                    </div>
-                  </>
-                )
+                        {(res.department || res.model) && (
+                          <div style={{ padding: '0 18px 14px', fontSize: 11, color: '#4b5563' }}>
+                            {res.department && `Dept: ${res.department}`}{res.department && res.model && ' · '}{res.model && `Model: ${res.model}`}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
 
             </div>

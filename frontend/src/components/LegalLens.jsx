@@ -304,15 +304,17 @@ const styles = `
   }
 `
 
-export default function LegalLens({ apiBase = '', onClose }) {
+export default function LegalLens({ apiBase = '', onClose, result, setResult }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [lang, setLang] = useState('hi')
-  const [res, setRes] = useState(null)
   const [loading, setLoading] = useState(false)
   const [drag, setDrag] = useState(false)
   const [copied, setCopied] = useState(false)
   const fileRef = useRef()
+
+  const res = result
+  const setRes = setResult
 
   function pickFile(f) {
     if (!f) return

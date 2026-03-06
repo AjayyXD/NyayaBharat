@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 
-export default function VoiceFiling({ apiBase }) {
+export default function VoiceFiling({ apiBase, result, setResult }) {
   const [file, setFile] = useState(null)
-  const [res, setRes] = useState(null)
   const [loading, setLoading] = useState(false)
   const [polling, setPolling] = useState(false)
-  const [view, setView] = useState('complaint') // 'complaint' | 'native' | 'english'
+  const [view, setView] = useState('complaint')
+
+  const res = result
+  const setRes = setResult
 
   async function process() {
     if (!file) return

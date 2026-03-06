@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import Landing from './components/Landing'
 import RightsBot from './components/RightsBot'
@@ -7,6 +7,20 @@ import OfficerMode from './components/OfficerMode'
 import VoiceFiling from './components/VoiceFiling'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://nyayabharat.saturnapi.in'
+const TTL_MS = 2 * 24 * 60 * 60 * 1000 // 2 days
+
+function lsSave(key, value) {
+  try { localStorage.setItem(key, JSON.stringify({ value, savedAt: Date.now() })) } catch {}
+}
+function lsLoad(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const { value, savedAt } = JSON.parse(raw)
+    if (Date.now() - savedAt > TTL_MS) { localStorage.removeItem(key); return null }
+    return value
+  } catch { return null }
+}
 
 function Navbar() {
   return (
@@ -52,6 +66,19 @@ function Navbar() {
 }
 
 export default function App() {
+  const [rightsHistory, setRightsHistoryState] = useState(() => lsLoad('rightsHistory') || [])
+  const [legalLensResult, setLegalLensResultState] = useState(() => lsLoad('legalLensResult'))
+  const [officerResult, setOfficerResultState] = useState(() => lsLoad('officerResult'))
+  const [voiceResult, setVoiceResultState] = useState(() => lsLoad('voiceResult'))
+
+  function setRightsHistory(val) {
+    const next = typeof val === 'function' ? val(rightsHistory) : val
+    setRightsHistoryState(next); lsSave('rightsHistory', next)
+  }
+  function setLegalLensResult(val) { setLegalLensResultState(val); lsSave('legalLensResult', val) }
+  function setOfficerResult(val) { setOfficerResultState(val); lsSave('officerResult', val) }
+  function setVoiceResult(val) { setVoiceResultState(val); lsSave('voiceResult', val) }
+
   function navigate(v) {
     window.location.href = `/${v === 'landing' ? '' : v}`
   }
@@ -62,10 +89,10 @@ export default function App() {
       <div className="content">
         <Routes>
           <Route path="/"         element={<Landing onNavigate={navigate} />} />
-          <Route path="/rights"   element={<RightsBot  apiBase={API_BASE} />} />
-          <Route path="/document" element={<LegalLens  apiBase={API_BASE} />} />
-          <Route path="/officer"  element={<OfficerMode apiBase={API_BASE} />} />
-          <Route path="/voice"    element={<VoiceFiling apiBase={API_BASE} />} />
+          <Route path="/rights"   element={<RightsBot  apiBase={API_BASE} history={rightsHistory}   setHistory={setRightsHistory} />} />
+          <Route path="/document" element={<LegalLens  apiBase={API_BASE} result={legalLensResult}  setResult={setLegalLensResult} />} />
+          <Route path="/officer"  element={<OfficerMode apiBase={API_BASE} result={officerResult}   setResult={setOfficerResult} />} />
+          <Route path="/voice"    element={<VoiceFiling apiBase={API_BASE} result={voiceResult}     setResult={setVoiceResult} />} />
         </Routes>
       </div>
     </BrowserRouter>
