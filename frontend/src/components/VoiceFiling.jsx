@@ -4,7 +4,6 @@ export default function VoiceFiling({ apiBase }) {
   const [file, setFile] = useState(null)
   const [res, setRes] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [jobName, setJobName] = useState(null)
   const [polling, setPolling] = useState(false)
 
   async function process() {
@@ -12,16 +11,19 @@ export default function VoiceFiling({ apiBase }) {
     setLoading(true)
     setRes(null)
     const fd = new FormData()
-    fd.append('file', file)           // ← colleague uses 'file'
+    fd.append('file', file)
     try {
-      const r = await fetch(`${apiBase}/api/complaint/voice`, {  // ← colleague's route
+      const r = await fetch(`${apiBase}/api/complaint/voice`, {
         method: 'POST',
         body: fd
       })
       const j = await r.json()
-      setJobName(j.job_name)
-      setRes({ status: 'processing', message: 'Transcription started...' })
-      pollResult(j.job_name)          // start polling automatically
+      if (j.job_name) {
+        setRes({ status: 'processing', message: 'Transcription started...' })
+        pollResult()
+      } else {
+        setRes({ error: j.detail || 'Unknown error' })
+      }
     } catch (e) {
       setRes({ error: e.message })
     } finally {
@@ -29,9 +31,8 @@ export default function VoiceFiling({ apiBase }) {
     }
   }
 
-  async function pollResult(job) {
+  function pollResult() {
     setPolling(true)
-    // Poll every 3 seconds until completed
     const interval = setInterval(async () => {
       try {
         const r = await fetch(`${apiBase}/api/complaint/result`)
@@ -77,10 +78,22 @@ export default function VoiceFiling({ apiBase }) {
           ) : (
             <>
               <div style={{ color: 'green', marginBottom: 8 }}>✅ Transcription Complete</div>
-              <h4>Transcript</h4>
-              <div style={{ background: '#f4f5f7', padding: 8, whiteSpace: 'pre-wrap' }}>
-                {res.transcript}
-              </div>
+              {res.native_transcript && (
+                <>
+                  <h4>Original ({res.native_transcript !== res.english_transcript ? 'Native Language' : 'English'})</h4>
+                  <div style={{ background: '#f4f5f7', padding: 8, whiteSpace: 'pre-wrap', borderRadius: 6 }}>
+                    {res.native_transcript}
+                  </div>
+                </>
+              )}
+              {res.english_transcript && res.english_transcript !== res.native_transcript && (
+                <>
+                  <h4 style={{ marginTop: 8 }}>English Translation</h4>
+                  <div style={{ background: '#f4f5f7', padding: 8, whiteSpace: 'pre-wrap', borderRadius: 6 }}>
+                    {res.english_transcript}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
