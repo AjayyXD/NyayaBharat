@@ -5,11 +5,13 @@ export default function VoiceFiling({ apiBase }) {
   const [res, setRes] = useState(null)
   const [loading, setLoading] = useState(false)
   const [polling, setPolling] = useState(false)
+  const [view, setView] = useState('native')
 
   async function process() {
     if (!file) return
     setLoading(true)
     setRes(null)
+    setView('native')
     const fd = new FormData()
     fd.append('file', file)
     try {
@@ -20,7 +22,7 @@ export default function VoiceFiling({ apiBase }) {
       const j = await r.json()
       if (j.job_name) {
         setRes({ status: 'processing', message: 'Transcription started...' })
-        pollResult()
+        pollResult(j.job_name)    // ← pass unique job_name
       } else {
         setRes({ error: j.detail || 'Unknown error' })
       }
@@ -31,11 +33,12 @@ export default function VoiceFiling({ apiBase }) {
     }
   }
 
-  function pollResult() {
+  function pollResult(jobName) {
     setPolling(true)
     const interval = setInterval(async () => {
       try {
-        const r = await fetch(`${apiBase}/api/complaint/result`)
+        // ← use job-specific route
+        const r = await fetch(`${apiBase}/api/complaint/result/${jobName}`)
         const j = await r.json()
         if (j.status === 'COMPLETED') {
           setRes(j)
@@ -56,6 +59,17 @@ export default function VoiceFiling({ apiBase }) {
     }, 3000)
   }
 
+  const tabStyle = (active) => ({
+    padding: '6px 16px',
+    borderRadius: 6,
+    border: 'none',
+    cursor: 'pointer',
+    fontWeight: active ? 700 : 400,
+    background: active ? '#1a1a2e' : '#e2e8f0',
+    color: active ? '#fff' : '#333',
+    fontSize: 13,
+  })
+
   return (
     <div className="service-card">
       <h3>🎤 Voice Complaint Filing</h3>
@@ -65,10 +79,15 @@ export default function VoiceFiling({ apiBase }) {
         onChange={e => setFile(e.target.files?.[0])}
       />
       <div style={{ marginTop: 8 }}>
-        <button className="button" onClick={process} disabled={!file || loading || polling}>
+        <button
+          className="button"
+          onClick={process}
+          disabled={!file || loading || polling}
+        >
           {loading ? 'Uploading...' : polling ? 'Transcribing...' : 'File Complaint'}
         </button>
       </div>
+
       {res && (
         <div style={{ marginTop: 12 }}>
           {res.error ? (
@@ -77,22 +96,24 @@ export default function VoiceFiling({ apiBase }) {
             <div style={{ color: '#888' }}>⏳ {res.message}</div>
           ) : (
             <>
-              <div style={{ color: 'green', marginBottom: 8 }}>✅ Transcription Complete</div>
-              {res.native_transcript && (
-                <>
-                  <h4>Original ({res.native_transcript !== res.english_transcript ? 'Native Language' : 'English'})</h4>
-                  <div style={{ background: '#f4f5f7', padding: 8, whiteSpace: 'pre-wrap', borderRadius: 6 }}>
-                    {res.native_transcript}
-                  </div>
-                </>
+              <div style={{ color: 'green', marginBottom: 12 }}>✅ Transcription Complete</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button style={tabStyle(view === 'native')} onClick={() => setView('native')}>
+                  🌐 Original Language
+                </button>
+                <button style={tabStyle(view === 'english')} onClick={() => setView('english')}>
+                  🇬🇧 English Translation
+                </button>
+              </div>
+              {view === 'native' && (
+                <div style={{ background: '#f4f5f7', padding: 12, whiteSpace: 'pre-wrap', borderRadius: 8, lineHeight: 1.7 }}>
+                  {res.native_transcript || 'No native transcript available.'}
+                </div>
               )}
-              {res.english_transcript && res.english_transcript !== res.native_transcript && (
-                <>
-                  <h4 style={{ marginTop: 8 }}>English Translation</h4>
-                  <div style={{ background: '#f4f5f7', padding: 8, whiteSpace: 'pre-wrap', borderRadius: 6 }}>
-                    {res.english_transcript}
-                  </div>
-                </>
+              {view === 'english' && (
+                <div style={{ background: '#f4f5f7', padding: 12, whiteSpace: 'pre-wrap', borderRadius: 8, lineHeight: 1.7 }}>
+                  {res.english_transcript || 'No English translation available.'}
+                </div>
               )}
             </>
           )}

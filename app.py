@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import requests
 from fastapi.responses import StreamingResponse
 import json
+import uuid
 
 # Import completed services
 from services.rights_chatbot import RightsChatbotService
@@ -277,16 +278,15 @@ class VoiceComplaintService:
             
         return {"status": status}
 
-voice_service = VoiceComplaintService()
-
 @app.post("/api/complaint/voice", tags=["Voice Complaints"])
 async def handle_voice_complaint(file: UploadFile = File(...)):
-    job_name = voice_service.start_job(file.file, "SimpleTestJob")
+    job_name = f"nyaya-{uuid.uuid4().hex[:12]}"
+    voice_complaint.start_job(file.file, job_name)
     return {"message": "Job started", "job_name": job_name}
 
-@app.get("/api/complaint/result", tags=["Voice Complaints"])
-async def get_result():
-    return voice_service.check_result("SimpleTestJob")
+@app.get("/api/complaint/result/{job_name}", tags=["Voice Complaints"])
+async def get_result(job_name: str):
+    return voice_complaint.check_result(job_name)
 
 
 # ===========================================================
